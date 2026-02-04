@@ -980,18 +980,27 @@ window.addEventListener('keydown', (e) => {
     }
 
     // 微信读书用 Canvas 渲染文字，window.getSelection() 无法获取选中内容
-    // 需要通过点击复制按钮 + 读取剪贴板的方式获取
+    // 通过监听 copy 事件获取复制的文字
+    let lastCopiedText = '';
+    document.addEventListener('copy', (e) => {
+        setTimeout(() => {
+            navigator.clipboard.readText().then(text => {
+                if (text) lastCopiedText = text.trim();
+            }).catch(() => {});
+        }, 50);
+    }, true);
+
     async function getSelectionViaClipboard() {
         const copyBtn = document.querySelector('.toolbarItem.copy') || document.querySelector('.wr_copy');
         if (!copyBtn) return '';
         
-        // 点击复制按钮
+        lastCopiedText = '';
         copyBtn.click();
         
-        // 等待一小段时间让复制完成
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 200));
         
-        // 读取剪贴板
+        if (lastCopiedText) return lastCopiedText;
+        
         try {
             const text = await navigator.clipboard.readText();
             return text?.trim() || '';
