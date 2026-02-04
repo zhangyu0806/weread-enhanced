@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.3
+// @version      3.3.4
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -233,7 +233,7 @@ function clickToolbarButton(selector) {
 }
 
 function isReviewPanelOpen() {
-    const panel = document.querySelector('.readerWriteReviewPanel');
+    const panel = document.querySelector('.reader_float_review_writer_content, .readerWriteReviewPanel');
     if (!panel) return false;
     const style = window.getComputedStyle(panel);
     return style.display !== 'none' && style.visibility !== 'hidden';
@@ -764,24 +764,20 @@ if (autoReadEnabled) {
 
 // 监听发表想法按钮点击，同步到 Flomo
 document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.writeReview_submit_button');
-    if (!btn) return;
+    const btn = e.target.closest('.wr_btn.wr_btn_Big, .writeReview_submit_button, .reviewEditorControl_submit_button');
+    if (!btn || !btn.innerText?.includes('发')) return;
     
-    setTimeout(() => {
-        const panel = document.querySelector('.readerWriteReviewPanel');
-        if (!panel) return;
-        
-        const textarea = panel.querySelector('textarea');
-        const thoughtText = textarea?.value?.trim() || '';
-        const selectedTextEl = panel.querySelector('.readerWriteReviewPanel_text, .writeReview_content_text');
-        const selectedText = selectedTextEl?.innerText?.trim() || '';
-        
-        if (flomoApiUrl && (thoughtText || selectedText)) {
-            const bookInfo = getBookInfo();
-            sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
-            console.log('[WR] 点击发表，同步到 Flomo:', { selectedText, thoughtText });
-        }
-    }, 100);
+    const panel = document.querySelector('.reader_float_review_writer_content, .readerWriteReviewPanel');
+    if (!panel) return;
+    
+    const textarea = panel.querySelector('textarea');
+    const thoughtText = textarea?.value?.trim() || '';
+    
+    if (flomoApiUrl && thoughtText) {
+        const bookInfo = getBookInfo();
+        sendToFlomo('', { ...bookInfo, thought: thoughtText });
+        console.log('[WR] 点击发表，同步到 Flomo:', { thoughtText });
+    }
 }, true);
 
 const wrState = {
@@ -975,28 +971,24 @@ window.addEventListener('keydown', (e) => {
 
     if (reviewOpen) {
         if ((e.ctrlKey || e.metaKey) && e.keyCode === 13) {
-            (async () => {
-                const panel = document.querySelector('.readerWriteReviewPanel');
-                const textarea = panel?.querySelector('textarea');
-                const thoughtText = textarea?.value?.trim() || '';
-                const selectedTextEl = panel?.querySelector('.readerWriteReviewPanel_text, .writeReview_content_text');
-                const selectedText = selectedTextEl?.innerText?.trim() || '';
-                
-                document.querySelector('.writeReview_submit_button')?.click();
-                
-                if (flomoApiUrl && (thoughtText || selectedText)) {
-                    const bookInfo = getBookInfo();
-                    const content = processTemplate(flomoTemplate, { 
-                        selectedText, 
-                        thought: thoughtText,
-                        ...bookInfo 
-                    });
-                    sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
-                    console.log('[WR] 想法已同步到 Flomo:', { selectedText, thoughtText });
-                }
-            })();
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const panel = document.querySelector('.reader_float_review_writer_content, .readerWriteReviewPanel');
+            const textarea = panel?.querySelector('textarea');
+            const thoughtText = textarea?.value?.trim() || '';
+            
+            const submitBtn = panel?.querySelector('.wr_btn.wr_btn_Big, .writeReview_submit_button');
+            if (submitBtn) submitBtn.click();
+            
+            if (flomoApiUrl && thoughtText) {
+                const bookInfo = getBookInfo();
+                sendToFlomo('', { ...bookInfo, thought: thoughtText });
+                console.log('[WR] Ctrl+Enter 发表，同步到 Flomo:', { thoughtText });
+            }
         } else if (e.keyCode === 27) {
-            document.querySelector('.readerWriteReviewPanel .closeButton')?.click();
+            const closeBtn = document.querySelector('.reader_float_panel_header_closeBtn, .readerWriteReviewPanel .closeButton');
+            if (closeBtn) closeBtn.click();
         }
         return;
     }
