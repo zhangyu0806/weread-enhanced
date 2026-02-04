@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.1
+// @version      3.4.2
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -763,7 +763,7 @@ if (autoReadEnabled) {
 }
 
 // 监听发表想法按钮点击，同步到 Flomo
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.wr_btn.wr_btn_Big, .writeReview_submit_button, .reviewEditorControl_submit_button');
     if (!btn || !btn.innerText?.includes('发')) return;
     
@@ -776,7 +776,17 @@ document.addEventListener('click', (e) => {
         }
     });
     
-    const selectedText = wrState.lastUnderlineText || '';
+    let selectedText = wrState.lastUnderlineText || '';
+    
+    // 如果没有保存的划线文字，尝试从剪贴板读取
+    if (!selectedText) {
+        try {
+            const clipText = await navigator.clipboard.readText();
+            if (clipText?.trim() && clipText.trim() !== thoughtText) {
+                selectedText = clipText.trim();
+            }
+        } catch (e) {}
+    }
     
     if (flomoApiUrl && (thoughtText || selectedText)) {
         const bookInfo = getBookInfo();
