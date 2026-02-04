@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.0
+// @version      3.3.1
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -857,6 +857,65 @@ function wrClickNextFrame(el) {
     return true;
 }
 
+// 微信读书用 Canvas 渲染文字，window.getSelection() 无法获取选中内容
+// 通过监听 copy 事件获取复制的文字
+let lastCopiedText = '';
+document.addEventListener('copy', () => {
+    setTimeout(() => {
+        navigator.clipboard.readText().then(text => {
+            if (text) lastCopiedText = text.trim();
+        }).catch(() => {});
+    }, 50);
+}, true);
+
+async function getSelectionViaClipboard() {
+    const copyBtn = document.querySelector('.toolbarItem.copy') || document.querySelector('.wr_copy');
+    if (!copyBtn) return '';
+    
+    lastCopiedText = '';
+    copyBtn.click();
+    
+    await new Promise(r => setTimeout(r, 200));
+    
+    if (lastCopiedText) return lastCopiedText;
+    
+    try {
+        const text = await navigator.clipboard.readText();
+        return text?.trim() || '';
+    } catch (e) {
+        console.log('[WR] clipboard read failed:', e);
+        return '';
+    }
+}
+
+function requireSelectionOrToast() {
+    const hasToolbar = document.querySelector('.reader_toolbar_container') || 
+                      document.querySelector('.readerToolbar');
+    if (!hasToolbar) {
+        showToast('请先选中文字');
+        return false;
+    }
+    return true;
+}
+
+async function requireSelectionAsync() {
+    const hasToolbar = document.querySelector('.reader_toolbar_container') || 
+                      document.querySelector('.readerToolbar');
+    if (!hasToolbar) {
+        showToast('请先选中文字');
+        return null;
+    }
+    
+    const text = await getSelectionViaClipboard();
+    if (!text) {
+        showToast('获取选中文字失败');
+        return null;
+    }
+    
+    wrState.selectedText = text;
+    return text;
+}
+
 console.log('[微信读书增强] 准备注册 keydown 监听器');
 
 // Use window capture so we run before page handlers.
@@ -977,68 +1036,6 @@ window.addEventListener('keydown', (e) => {
             wrClickNextFrame(wrState.buttons.removeUnderline || document.querySelector('.toolbarItem.removeUnderline'));
             document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
         }
-    }
-
-    // 微信读书用 Canvas 渲染文字，window.getSelection() 无法获取选中内容
-    // 通过监听 copy 事件获取复制的文字
-    let lastCopiedText = '';
-    document.addEventListener('copy', (e) => {
-        setTimeout(() => {
-            navigator.clipboard.readText().then(text => {
-                if (text) lastCopiedText = text.trim();
-            }).catch(() => {});
-        }, 50);
-    }, true);
-
-    async function getSelectionViaClipboard() {
-        const copyBtn = document.querySelector('.toolbarItem.copy') || document.querySelector('.wr_copy');
-        if (!copyBtn) return '';
-        
-        lastCopiedText = '';
-        copyBtn.click();
-        
-        await new Promise(r => setTimeout(r, 200));
-        
-        if (lastCopiedText) return lastCopiedText;
-        
-        try {
-            const text = await navigator.clipboard.readText();
-            return text?.trim() || '';
-        } catch (e) {
-            console.log('[WR] clipboard read failed:', e);
-            return '';
-        }
-    }
-
-    function requireSelectionOrToast() {
-        // 检查工具栏是否存在（工具栏存在说明有选中文字）
-        const hasToolbar = document.querySelector('.reader_toolbar_container') || 
-                          document.querySelector('.readerToolbar');
-        if (!hasToolbar) {
-            showToast('请先选中文字');
-            return false;
-        }
-        return true; // 返回 true，实际文字获取在 async 函数中完成
-    }
-    
-    async function requireSelectionAsync() {
-        // 先检查工具栏
-        const hasToolbar = document.querySelector('.reader_toolbar_container') || 
-                          document.querySelector('.readerToolbar');
-        if (!hasToolbar) {
-            showToast('请先选中文字');
-            return null;
-        }
-        
-        // 通过剪贴板获取选中文字
-        const text = await getSelectionViaClipboard();
-        if (!text) {
-            showToast('获取选中文字失败');
-            return null;
-        }
-        
-        wrState.selectedText = text;
-        return text;
     }
 
     if (matchHotkey(e, hotkeys.sendToFlomo)) {
