@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.2
+// @version      3.4.3
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -824,22 +824,34 @@ function wrRestoreSelection() {
     }
 }
 
+function getToolbarBtn(type) {
+    const selectors = {
+        copy: '.toolbarItem.copy, .review_section_toolbar_item_copy',
+        underlineBg: '.toolbarItem.underlineBg, .review_section_toolbar_item_underline[class*="Bg"], .review_section_toolbar_item_marker',
+        underlineWave: '.toolbarItem.underlineHandWrite, .review_section_toolbar_item_underline[class*="Wave"], .review_section_toolbar_item_wave',
+        underlineStraight: '.toolbarItem.underlineStraight, .review_section_toolbar_item_underline',
+        removeUnderline: '.toolbarItem.removeUnderline, .review_section_toolbar_item_remove',
+        review: '.toolbarItem.review, .review_section_toolbar_item_review'
+    };
+    return document.querySelector(selectors[type] || '');
+}
+
 function wrHasToolbar() {
     return !!(
         document.querySelector('.reader_toolbar_container') ||
         document.querySelector('.readerToolbar') ||
-        document.querySelector('.toolbarItem.copy') ||
-        document.querySelector('.toolbarItem.underlineStraight')
+        document.querySelector('.review_section_toolbar_items_wrapper') ||
+        getToolbarBtn('copy')
     );
 }
 
 function wrRefreshButtons() {
-    wrState.buttons.copy = document.querySelector('.toolbarItem.copy');
-    wrState.buttons.underlineBg = document.querySelector('.toolbarItem.underlineBg');
-    wrState.buttons.underlineWave = document.querySelector('.toolbarItem.underlineHandWrite');
-    wrState.buttons.underlineStraight = document.querySelector('.toolbarItem.underlineStraight');
-    wrState.buttons.removeUnderline = document.querySelector('.toolbarItem.removeUnderline');
-    wrState.buttons.review = document.querySelector('.toolbarItem.review');
+    wrState.buttons.copy = getToolbarBtn('copy');
+    wrState.buttons.underlineBg = getToolbarBtn('underlineBg');
+    wrState.buttons.underlineWave = getToolbarBtn('underlineWave');
+    wrState.buttons.underlineStraight = getToolbarBtn('underlineStraight');
+    wrState.buttons.removeUnderline = getToolbarBtn('removeUnderline');
+    wrState.buttons.review = getToolbarBtn('review');
 }
 
 function wrRefreshSelection() {
@@ -940,7 +952,7 @@ document.addEventListener('click', (e) => {
 }, true);
 
 async function getSelectionViaClipboard() {
-    const copyBtn = document.querySelector('.toolbarItem.copy') || document.querySelector('.wr_copy');
+    const copyBtn = getToolbarBtn('copy') || document.querySelector('.wr_copy');
     if (!copyBtn) return '';
     
     lastCopiedText = '';
@@ -1060,24 +1072,21 @@ window.addEventListener('keydown', (e) => {
             wrRestoreSelection();
 
             const keyCode = e.keyCode;
-            const btn = document.querySelector('.toolbarItem.underlineStraight');
-            console.log('[WR] btn found:', !!btn, btn);
             if (keyCode === 49) {
-                wrClickNextFrame(document.querySelector('.toolbarItem.copy'));
+                wrClickNextFrame(getToolbarBtn('copy'));
             } else if (keyCode === 50) {
-                wrClickNextFrame(document.querySelector('.toolbarItem.underlineBg'));
+                wrClickNextFrame(getToolbarBtn('underlineBg'));
             } else if (keyCode === 51) {
-                wrClickNextFrame(document.querySelector('.toolbarItem.underlineHandWrite'));
+                wrClickNextFrame(getToolbarBtn('underlineWave'));
             } else if (keyCode === 52) {
-                console.log('[WR] clicking underlineStraight');
-                wrClickNextFrame(btn);
+                wrClickNextFrame(getToolbarBtn('underlineStraight'));
             } else if (keyCode === 53) {
                 getSelectionViaClipboard().then(text => {
                     if (text) wrState.lastUnderlineText = text;
                 });
-                wrClickNextFrame(document.querySelector('.toolbarItem.review'));
+                wrClickNextFrame(getToolbarBtn('review'));
             } else if (keyCode === 8) {
-                wrClickNextFrame(document.querySelector('.toolbarItem.removeUnderline'));
+                wrClickNextFrame(getToolbarBtn('removeUnderline'));
                 document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
             }
             return;
@@ -1102,20 +1111,20 @@ window.addEventListener('keydown', (e) => {
         wrRestoreSelection();
 
         if (keyCode === 49) {
-            wrClickNextFrame(wrState.buttons.copy || document.querySelector('.toolbarItem.copy'));
+            wrClickNextFrame(wrState.buttons.copy || getToolbarBtn('copy'));
         } else if (keyCode === 50) {
-            wrClickNextFrame(wrState.buttons.underlineBg || document.querySelector('.toolbarItem.underlineBg'));
+            wrClickNextFrame(wrState.buttons.underlineBg || getToolbarBtn('underlineBg'));
         } else if (keyCode === 51) {
-            wrClickNextFrame(wrState.buttons.underlineWave || document.querySelector('.toolbarItem.underlineHandWrite'));
+            wrClickNextFrame(wrState.buttons.underlineWave || getToolbarBtn('underlineWave'));
         } else if (keyCode === 52) {
-            wrClickNextFrame(wrState.buttons.underlineStraight || document.querySelector('.toolbarItem.underlineStraight'));
+            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
         } else if (keyCode === 53) {
             getSelectionViaClipboard().then(text => {
                 if (text) wrState.lastUnderlineText = text;
             });
-            wrClickNextFrame(wrState.buttons.review || document.querySelector('.toolbarItem.review'));
+            wrClickNextFrame(wrState.buttons.review || getToolbarBtn('review'));
         } else if (keyCode === 8) {
-            wrClickNextFrame(wrState.buttons.removeUnderline || document.querySelector('.toolbarItem.removeUnderline'));
+            wrClickNextFrame(wrState.buttons.removeUnderline || getToolbarBtn('removeUnderline'));
             document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
         }
     }
@@ -1133,7 +1142,7 @@ window.addEventListener('keydown', (e) => {
             console.log('[WR] selectedText:', selectedText);
             const bookInfo = getBookInfo();
             const content = processTemplate(flomoTemplate, { selectedText, ...bookInfo });
-            wrClickNextFrame(wrState.buttons.underlineStraight || document.querySelector('.toolbarItem.underlineStraight'));
+            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
             GM_setClipboard(content);
             sendToFlomo(selectedText, bookInfo);
         })();
@@ -1166,7 +1175,7 @@ window.addEventListener('keydown', (e) => {
             
             const bookInfo = getBookInfo();
             const content = `${selectedText}\n\n——《${bookInfo.bookName}》${bookInfo.chapter}`;
-            wrClickNextFrame(wrState.buttons.underlineStraight || document.querySelector('.toolbarItem.underlineStraight'));
+            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
             GM_setClipboard(content);
             sendToNotion(selectedText, bookInfo);
         })();
@@ -1183,7 +1192,7 @@ window.addEventListener('keydown', (e) => {
             
             const bookInfo = getBookInfo();
             const content = `${selectedText}\n\n——《${bookInfo.bookName}》${bookInfo.chapter}`;
-            wrClickNextFrame(wrState.buttons.underlineStraight || document.querySelector('.toolbarItem.underlineStraight'));
+            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
             GM_setClipboard(content);
             sendToObsidian(selectedText, bookInfo);
         })();
@@ -1200,7 +1209,7 @@ window.addEventListener('keydown', (e) => {
             
             const bookInfo = getBookInfo();
             const content = `${selectedText}\n\n——《${bookInfo.bookName}》${bookInfo.chapter}`;
-            wrClickNextFrame(wrState.buttons.underlineStraight || document.querySelector('.toolbarItem.underlineStraight'));
+            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
             GM_setClipboard(content);
             sendToWebhook(selectedText, bookInfo);
         })();
