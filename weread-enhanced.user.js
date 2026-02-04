@@ -213,6 +213,7 @@ function showToast(msg) {
 function processTemplate(template, data) {
     return template
         .replace(/\{\{selectedText\}\}/g, data.selectedText || '')
+        .replace(/\{\{thought\}\}/g, data.thought || '')
         .replace(/\{\{bookName\}\}/g, data.bookName || '')
         .replace(/\{\{chapter\}\}/g, data.chapter || '')
         .replace(/\{\{tags\}\}/g, flomoTags);
@@ -617,7 +618,7 @@ function createPanel() {
                     <input type="text" id="wr-flomo-tags" value="${flomoTags}" placeholder="#书摘">
                 </div>
                 <div class="wr-input-group">
-                    <label>模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}})</label>
+                    <label>模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}}, {{thought}})</label>
                     <input type="text" id="wr-flomo-template" value="${flomoTemplate.replace(/\n/g, '\\n')}">
                 </div>
             </div>
@@ -884,7 +885,26 @@ window.addEventListener('keydown', (e) => {
 
     if (reviewOpen) {
         if ((e.ctrlKey || e.metaKey) && e.keyCode === 13) {
-            document.querySelector('.writeReview_submit_button')?.click();
+            (async () => {
+                const panel = document.querySelector('.readerWriteReviewPanel');
+                const textarea = panel?.querySelector('textarea');
+                const thoughtText = textarea?.value?.trim() || '';
+                const selectedTextEl = panel?.querySelector('.readerWriteReviewPanel_text, .writeReview_content_text');
+                const selectedText = selectedTextEl?.innerText?.trim() || '';
+                
+                document.querySelector('.writeReview_submit_button')?.click();
+                
+                if (flomoApiUrl && (thoughtText || selectedText)) {
+                    const bookInfo = getBookInfo();
+                    const content = processTemplate(flomoTemplate, { 
+                        selectedText, 
+                        thought: thoughtText,
+                        ...bookInfo 
+                    });
+                    sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
+                    console.log('[WR] 想法已同步到 Flomo:', { selectedText, thoughtText });
+                }
+            })();
         } else if (e.keyCode === 27) {
             document.querySelector('.readerWriteReviewPanel .closeButton')?.click();
         }
