@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.2
+// @version      3.3.3
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -66,9 +66,9 @@ let panelTriggerMode = GM_getValue("panelTriggerMode", "edge");
 
 const defaultHotkeys = {
     sendToFlomo: { key: 'KeyJ', ctrl: true, shift: true, alt: true, meta: false },
-    sendToNotion: { key: 'KeyN', ctrl: true, shift: true, alt: false, meta: false },
-    sendToObsidian: { key: 'KeyO', ctrl: true, shift: true, alt: false, meta: false },
-    sendToWebhook: { key: 'KeyW', ctrl: true, shift: true, alt: false, meta: false },
+    sendToNotion: { key: 'KeyN', ctrl: true, shift: true, alt: true, meta: false },
+    sendToObsidian: { key: 'KeyO', ctrl: true, shift: true, alt: true, meta: false },
+    sendToWebhook: { key: 'KeyW', ctrl: true, shift: true, alt: true, meta: false },
     copyFormatted: { key: 'KeyC', ctrl: true, shift: true, alt: false, meta: false },
     underlineStraight: { key: 'Digit4', ctrl: false, shift: false, alt: false, meta: false },
     underlineBg: { key: 'Digit2', ctrl: false, shift: false, alt: false, meta: false },
