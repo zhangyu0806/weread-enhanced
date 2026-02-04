@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.4
+// @version      3.3.5
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -945,30 +945,10 @@ console.log('[微信读书增强] 准备注册 keydown 监听器');
 window.addEventListener('keydown', (e) => {
     console.log('[WR] keydown:', e.keyCode, e.code, 'ctrl:', e.ctrlKey, 'shift:', e.shiftKey, 'alt:', e.altKey);
     console.log('[WR] hotkeys.sendToFlomo:', JSON.stringify(hotkeys.sendToFlomo));
-    if (wrShouldIgnoreKeyEventTarget(e.target)) {
-        console.log('[WR] ignored target');
-        return;
-    }
-
+    
     const reviewOpen = isReviewPanelOpen();
-
-    if (matchHotkey(e, hotkeys.togglePanel)) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        togglePanel();
-        return;
-    }
-
-    if (e.code === 'Space' && spacePageEnabled && !reviewOpen) {
-        const scrollTop = document.documentElement.scrollTop;
-        const scrollHeight = document.documentElement.scrollHeight - window.innerHeight - 10;
-        if (scrollTop >= scrollHeight) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            nextPage();
-        }
-    }
-
+    
+    // 写想法面板打开时，处理 Ctrl+Enter 和 Esc
     if (reviewOpen) {
         if ((e.ctrlKey || e.metaKey) && e.keyCode === 13) {
             e.preventDefault();
@@ -986,11 +966,34 @@ window.addEventListener('keydown', (e) => {
                 sendToFlomo('', { ...bookInfo, thought: thoughtText });
                 console.log('[WR] Ctrl+Enter 发表，同步到 Flomo:', { thoughtText });
             }
+            return;
         } else if (e.keyCode === 27) {
             const closeBtn = document.querySelector('.reader_float_panel_header_closeBtn, .readerWriteReviewPanel .closeButton');
             if (closeBtn) closeBtn.click();
+            return;
         }
+    }
+    
+    if (wrShouldIgnoreKeyEventTarget(e.target)) {
+        console.log('[WR] ignored target');
         return;
+    }
+
+    if (matchHotkey(e, hotkeys.togglePanel)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        togglePanel();
+        return;
+    }
+
+    if (e.code === 'Space' && spacePageEnabled && !reviewOpen) {
+        const scrollTop = document.documentElement.scrollTop;
+        const scrollHeight = document.documentElement.scrollHeight - window.innerHeight - 10;
+        if (scrollTop >= scrollHeight) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            nextPage();
+        }
     }
 
     if (wrHasNoModifiers(e) && wrIsActionKeyCode(e.keyCode)) {
