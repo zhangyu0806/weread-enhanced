@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.7
+// @version      3.4.0
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -46,7 +46,7 @@ let immersiveMode = GM_getValue("immersiveMode", false);
 let spacePageEnabled = GM_getValue("spacePageEnabled", true);
 let autoReadEnabled = GM_getValue("autoReadEnabled", false);
 let flomoTags = GM_getValue("flomoTags", "#书摘");
-let flomoTemplate = GM_getValue("flomoTemplate", "{{tags}} #{{bookName}}\n{{selectedText}}");
+let flomoTemplate = GM_getValue("flomoTemplate", "{{tags}} #{{bookName}}\n\n{{selectedText}}\n\n💭 {{thought}}");
 let flomoApiUrl = GM_getValue("flomoApiUrl", "");
 
 let autoReadTimer = null;
@@ -776,10 +776,12 @@ document.addEventListener('click', (e) => {
         }
     });
     
-    if (flomoApiUrl && thoughtText) {
+    const selectedText = wrState.lastUnderlineText || '';
+    
+    if (flomoApiUrl && (thoughtText || selectedText)) {
         const bookInfo = getBookInfo();
-        sendToFlomo('', { ...bookInfo, thought: thoughtText });
-        console.log('[WR] 点击发表，同步到 Flomo:', { thoughtText });
+        sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
+        console.log('[WR] 点击发表，同步到 Flomo:', { selectedText, thoughtText });
     }
 }, true);
 
@@ -787,6 +789,7 @@ const wrState = {
     selectedText: '',
     selectedRange: null,
     lastSelectedAt: 0,
+    lastUnderlineText: '',
     buttons: {
         copy: null,
         underlineBg: null,
@@ -969,10 +972,12 @@ window.addEventListener('keydown', (e) => {
             const submitBtn = document.querySelector('.wr_btn.wr_btn_Big');
             if (submitBtn && submitBtn.innerText?.includes('发')) submitBtn.click();
             
-            if (flomoApiUrl && thoughtText) {
+            const selectedText = wrState.lastUnderlineText || '';
+            
+            if (flomoApiUrl && (thoughtText || selectedText)) {
                 const bookInfo = getBookInfo();
-                sendToFlomo('', { ...bookInfo, thought: thoughtText });
-                console.log('[WR] Ctrl+Enter 发表，同步到 Flomo:', { thoughtText });
+                sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
+                console.log('[WR] Ctrl+Enter 发表，同步到 Flomo:', { selectedText, thoughtText });
             }
             return;
         } else if (e.keyCode === 27) {
@@ -1026,6 +1031,9 @@ window.addEventListener('keydown', (e) => {
                 console.log('[WR] clicking underlineStraight');
                 wrClickNextFrame(btn);
             } else if (keyCode === 53) {
+                getSelectionViaClipboard().then(text => {
+                    if (text) wrState.lastUnderlineText = text;
+                });
                 wrClickNextFrame(document.querySelector('.toolbarItem.review'));
             } else if (keyCode === 8) {
                 wrClickNextFrame(document.querySelector('.toolbarItem.removeUnderline'));
@@ -1061,6 +1069,9 @@ window.addEventListener('keydown', (e) => {
         } else if (keyCode === 52) {
             wrClickNextFrame(wrState.buttons.underlineStraight || document.querySelector('.toolbarItem.underlineStraight'));
         } else if (keyCode === 53) {
+            getSelectionViaClipboard().then(text => {
+                if (text) wrState.lastUnderlineText = text;
+            });
             wrClickNextFrame(wrState.buttons.review || document.querySelector('.toolbarItem.review'));
         } else if (keyCode === 8) {
             wrClickNextFrame(wrState.buttons.removeUnderline || document.querySelector('.toolbarItem.removeUnderline'));
