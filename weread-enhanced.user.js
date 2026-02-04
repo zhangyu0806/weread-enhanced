@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.6
+// @version      3.3.7
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -767,11 +767,14 @@ document.addEventListener('click', (e) => {
     const btn = e.target.closest('.wr_btn.wr_btn_Big, .writeReview_submit_button, .reviewEditorControl_submit_button');
     if (!btn || !btn.innerText?.includes('发')) return;
     
-    const panel = document.querySelector('.reader_float_review_writer, .reader_float_review_writer_content, .readerWriteReviewPanel');
-    if (!panel) return;
-    
-    const textarea = panel.querySelector('textarea');
-    const thoughtText = textarea?.value?.trim() || '';
+    const textareas = document.querySelectorAll('.writeReview_textarea');
+    let thoughtText = '';
+    textareas.forEach(ta => {
+        const rect = ta.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0 && ta.value?.trim()) {
+            thoughtText = ta.value.trim();
+        }
+    });
     
     if (flomoApiUrl && thoughtText) {
         const bookInfo = getBookInfo();
@@ -954,12 +957,17 @@ window.addEventListener('keydown', (e) => {
             e.preventDefault();
             e.stopImmediatePropagation();
             
-            const panel = document.querySelector('.reader_float_review_writer, .reader_float_review_writer_content, .readerWriteReviewPanel');
-            const textarea = panel?.querySelector('textarea');
-            const thoughtText = textarea?.value?.trim() || '';
+            const textareas = document.querySelectorAll('.writeReview_textarea');
+            let thoughtText = '';
+            textareas.forEach(ta => {
+                const rect = ta.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0 && ta.value?.trim()) {
+                    thoughtText = ta.value.trim();
+                }
+            });
             
-            const submitBtn = panel?.querySelector('.wr_btn.wr_btn_Big, .writeReview_submit_button');
-            if (submitBtn) submitBtn.click();
+            const submitBtn = document.querySelector('.wr_btn.wr_btn_Big');
+            if (submitBtn && submitBtn.innerText?.includes('发')) submitBtn.click();
             
             if (flomoApiUrl && thoughtText) {
                 const bookInfo = getBookInfo();
