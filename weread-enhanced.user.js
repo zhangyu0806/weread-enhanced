@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.3.1
+// @version      3.3.2
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -234,7 +234,9 @@ function clickToolbarButton(selector) {
 
 function isReviewPanelOpen() {
     const panel = document.querySelector('.readerWriteReviewPanel');
-    return panel && panel.style.display !== 'none';
+    if (!panel) return false;
+    const style = window.getComputedStyle(panel);
+    return style.display !== 'none' && style.visibility !== 'hidden';
 }
 
 GM_registerMenuCommand("背景色：" + colors[colorIndex].title, () => {
@@ -585,16 +587,19 @@ function createPanel() {
                     <span class="wr-guide-arrow">▼</span>
                 </div>
                 <div class="wr-guide-content" id="wr-guide-content">
-                    <p><b>基本操作：</b></p>
-                    <p>1. 选中文字 → 按快捷键 → 自动划线 + 复制 + 发送</p>
-                    <p>2. 数字键 1-5 需在选中文字后使用</p>
-                    <p><b>快捷键说明：</b></p>
+                    <p><b>快捷标注（选中文字后）：</b></p>
                     <p>• 1 复制 / 2 马克笔 / 3 波浪线 / 4 直线 / 5 写想法</p>
-                    <p>• Backspace 删除划线</p>
-                    <p>• Ctrl+Shift+Alt+J 划线+复制+发送Flomo</p>
+                    <p>• Backspace 删除划线/想法</p>
+                    <p>• Ctrl+Enter 提交想法（自动同步Flomo）</p>
+                    <p>• Esc 关闭想法弹窗</p>
+                    <p><b>笔记同步：</b></p>
+                    <p>• Ctrl+Shift+Alt+J 发送到 Flomo</p>
+                    <p>• Ctrl+Shift+Alt+N 发送到 Notion</p>
+                    <p>• Ctrl+Shift+Alt+O 发送到 Obsidian</p>
+                    <p>• Ctrl+Shift+Alt+W 发送到 Webhook</p>
+                    <p><b>其他：</b></p>
                     <p>• Ctrl+, 打开设置面板</p>
-                    <p><b>配置服务：</b></p>
-                    <p>在下方填入对应服务的 API 信息即可启用</p>
+                    <p>• 小键盘0 自动阅读开关</p>
                 </div>
             </div>
             <div class="wr-section">
@@ -756,6 +761,28 @@ createPanel();
 if (autoReadEnabled) {
     setTimeout(startAutoRead, 2000);
 }
+
+// 监听发表想法按钮点击，同步到 Flomo
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.writeReview_submit_button');
+    if (!btn) return;
+    
+    setTimeout(() => {
+        const panel = document.querySelector('.readerWriteReviewPanel');
+        if (!panel) return;
+        
+        const textarea = panel.querySelector('textarea');
+        const thoughtText = textarea?.value?.trim() || '';
+        const selectedTextEl = panel.querySelector('.readerWriteReviewPanel_text, .writeReview_content_text');
+        const selectedText = selectedTextEl?.innerText?.trim() || '';
+        
+        if (flomoApiUrl && (thoughtText || selectedText)) {
+            const bookInfo = getBookInfo();
+            sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
+            console.log('[WR] 点击发表，同步到 Flomo:', { selectedText, thoughtText });
+        }
+    }, 100);
+}, true);
 
 const wrState = {
     selectedText: '',
