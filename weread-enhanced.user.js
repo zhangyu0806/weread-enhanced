@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         微信读书增强
+// @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
-// @namespace    https://greasyfork.org/users/weread-enhanced
-// @version      3.2.0
-// @description  合并版：背景色、宽屏、自动阅读、沉浸模式、快捷标注、发送到Flomo
-// @author       Velens & Ernest Lee & Zhang
+// @namespace    https://github.com/zhangyu0806/weread-enhanced
+// @version      3.3.0
+// @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
+// @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
+// @author       zhangyu0806
 // @match        https://weread.qq.com/web/reader/*
 // @license      MIT
 // @grant        GM_addStyle
@@ -14,6 +16,8 @@
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // @connect      *
+// @homepageURL  https://github.com/zhangyu0806/weread-enhanced
+// @supportURL   https://github.com/zhangyu0806/weread-enhanced/issues
 // ==/UserScript==
 
 console.log('[微信读书增强] 脚本开始执行');
