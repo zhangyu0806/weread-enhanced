@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.8
+// @version      3.4.9
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -884,8 +884,21 @@ function wrShouldIgnoreKeyEventTarget(target) {
     return false;
 }
 
-function wrIsActionKeyCode(keyCode) {
-    return keyCode === 49 || keyCode === 50 || keyCode === 51 || keyCode === 52 || keyCode === 53 || keyCode === 8;
+function wrIsActionKeyCode(e) {
+    const code = e.code;
+    return code === 'Digit1' || code === 'Digit2' || code === 'Digit3' || code === 'Digit4' || code === 'Digit5' || code === 'Backspace';
+}
+
+function wrGetActionFromCode(code) {
+    const map = {
+        'Digit1': 'copy',
+        'Digit2': 'underlineBg',
+        'Digit3': 'underlineWave',
+        'Digit4': 'underlineStraight',
+        'Digit5': 'review',
+        'Backspace': 'removeUnderline'
+    };
+    return map[code] || null;
 }
 
 function wrHasNoModifiers(e) {
@@ -1046,35 +1059,33 @@ window.addEventListener('keydown', (e) => {
         }
     }
 
-    if (wrHasNoModifiers(e) && wrIsActionKeyCode(e.keyCode)) {
+    if (wrHasNoModifiers(e) && wrIsActionKeyCode(e)) {
         const toolbarReady = wrHasToolbar();
-        console.log('[WR] keyCode:', e.keyCode, 'toolbarReady:', toolbarReady);
+        console.log('[WR] code:', e.code, 'toolbarReady:', toolbarReady);
         if (toolbarReady) {
             e.preventDefault();
             e.stopImmediatePropagation();
-            wrRefreshSelection();
-            wrRestoreSelection();
 
-            const keyCode = e.keyCode;
-            if (keyCode === 49) {
-                const btn = getToolbarBtn('copy') || document.querySelector('.wr_copy');
+            const action = wrGetActionFromCode(e.code);
+            if (action === 'copy') {
+                const btn = getToolbarBtn('copy');
                 if (btn) btn.click();
-            } else if (keyCode === 50) {
+            } else if (action === 'underlineBg') {
                 const btn = getToolbarBtn('underlineBg');
                 if (btn) btn.click();
-            } else if (keyCode === 51) {
+            } else if (action === 'underlineWave') {
                 const btn = getToolbarBtn('underlineWave');
                 if (btn) btn.click();
-            } else if (keyCode === 52) {
+            } else if (action === 'underlineStraight') {
                 const btn = getToolbarBtn('underlineStraight');
                 if (btn) btn.click();
-            } else if (keyCode === 53) {
+            } else if (action === 'review') {
                 getSelectionViaClipboard().then(text => {
                     if (text) wrState.lastUnderlineText = text;
                 });
-                const btn = getToolbarBtn('review') || document.querySelector('.toolbarItem.review');
+                const btn = getToolbarBtn('review');
                 if (btn) btn.click();
-            } else if (keyCode === 8) {
+            } else if (action === 'removeUnderline') {
                 const btn = getToolbarBtn('removeUnderline');
                 if (btn) btn.click();
                 document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
@@ -1091,34 +1102,33 @@ window.addEventListener('keydown', (e) => {
     const toolbarReady = wrHasToolbar();
     if (toolbarReady) wrRefreshButtons();
 
-    const keyCode = e.keyCode;
     const hasCachedSelection = !!(wrState.selectedRange || wrState.selectedText);
-    const shouldHandleActionKey = wrIsActionKeyCode(keyCode) && (toolbarReady || hasCachedSelection);
+    const shouldHandleActionKey = wrIsActionKeyCode(e) && (toolbarReady || hasCachedSelection);
 
     if (shouldHandleActionKey) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        wrRestoreSelection();
 
-        if (keyCode === 49) {
-            const btn = wrState.buttons.copy || getToolbarBtn('copy') || document.querySelector('.wr_copy');
+        const action = wrGetActionFromCode(e.code);
+        if (action === 'copy') {
+            const btn = wrState.buttons.copy || getToolbarBtn('copy');
             if (btn) btn.click();
-        } else if (keyCode === 50) {
+        } else if (action === 'underlineBg') {
             const btn = wrState.buttons.underlineBg || getToolbarBtn('underlineBg');
             if (btn) btn.click();
-        } else if (keyCode === 51) {
+        } else if (action === 'underlineWave') {
             const btn = wrState.buttons.underlineWave || getToolbarBtn('underlineWave');
             if (btn) btn.click();
-        } else if (keyCode === 52) {
+        } else if (action === 'underlineStraight') {
             const btn = wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight');
             if (btn) btn.click();
-        } else if (keyCode === 53) {
+        } else if (action === 'review') {
             getSelectionViaClipboard().then(text => {
                 if (text) wrState.lastUnderlineText = text;
             });
-            const btn = wrState.buttons.review || getToolbarBtn('review') || document.querySelector('.toolbarItem.review');
+            const btn = wrState.buttons.review || getToolbarBtn('review');
             if (btn) btn.click();
-        } else if (keyCode === 8) {
+        } else if (action === 'removeUnderline') {
             const btn = wrState.buttons.removeUnderline || getToolbarBtn('removeUnderline');
             if (btn) btn.click();
             document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
