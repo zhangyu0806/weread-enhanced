@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.3
+// @version      3.4.4
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -776,17 +776,7 @@ document.addEventListener('click', async (e) => {
         }
     });
     
-    let selectedText = wrState.lastUnderlineText || '';
-    
-    // 如果没有保存的划线文字，尝试从剪贴板读取
-    if (!selectedText) {
-        try {
-            const clipText = await navigator.clipboard.readText();
-            if (clipText?.trim() && clipText.trim() !== thoughtText) {
-                selectedText = clipText.trim();
-            }
-        } catch (e) {}
-    }
+    let selectedText = wrState.lastUnderlineText || lastCopiedText || '';
     
     if (flomoApiUrl && (thoughtText || selectedText)) {
         const bookInfo = getBookInfo();
@@ -827,10 +817,10 @@ function wrRestoreSelection() {
 function getToolbarBtn(type) {
     const selectors = {
         copy: '.toolbarItem.copy, .review_section_toolbar_item_copy',
-        underlineBg: '.toolbarItem.underlineBg, .review_section_toolbar_item_underline[class*="Bg"], .review_section_toolbar_item_marker',
-        underlineWave: '.toolbarItem.underlineHandWrite, .review_section_toolbar_item_underline[class*="Wave"], .review_section_toolbar_item_wave',
+        underlineBg: '.toolbarItem.underlineBg',
+        underlineWave: '.toolbarItem.underlineHandWrite',
         underlineStraight: '.toolbarItem.underlineStraight, .review_section_toolbar_item_underline',
-        removeUnderline: '.toolbarItem.removeUnderline, .review_section_toolbar_item_remove',
+        removeUnderline: '.toolbarItem.removeUnderline',
         review: '.toolbarItem.review, .review_section_toolbar_item_review'
     };
     return document.querySelector(selectors[type] || '');
@@ -908,46 +898,30 @@ function wrClickNextFrame(el) {
     return true;
 }
 
-// 微信读书用 Canvas 渲染文字，需要通过复制按钮获取选中内容
+// 微信读书用 Canvas 渲染文字，监听 copy 事件获取复制的内容
 let lastCopiedText = '';
 
-// 监听工具栏复制按钮点击
-document.addEventListener('click', (e) => {
-    const copyBtn = e.target.closest('.toolbarItem.copy, .wr_copy, .review_section_toolbar_item_copy');
-    if (copyBtn) {
-        setTimeout(async () => {
-            try {
-                const text = await navigator.clipboard.readText();
-                if (text?.trim()) {
-                    lastCopiedText = text.trim();
-                    wrState.lastUnderlineText = text.trim();
-                    console.log('[WR] 复制按钮点击，保存文字:', lastCopiedText.slice(0, 50));
-                }
-            } catch (e) {
-                console.log('[WR] 读取剪贴板失败:', e);
+document.addEventListener('copy', (e) => {
+    setTimeout(async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text?.trim()) {
+                lastCopiedText = text.trim();
+                wrState.lastUnderlineText = text.trim();
+                console.log('[WR] copy事件，保存文字:', lastCopiedText.slice(0, 50));
             }
-        }, 100);
-    }
-}, true);
+        } catch (err) {
+            console.log('[WR] copy事件读取剪贴板失败');
+        }
+    }, 50);
+});
 
-// 监听写想法按钮点击，先复制再打开
+// 监听写想法按钮点击，先触发复制
 document.addEventListener('click', (e) => {
     const reviewBtn = e.target.closest('.toolbarItem.review, .review_section_toolbar_item_review');
     if (reviewBtn) {
-        const copyBtn = document.querySelector('.toolbarItem.copy, .review_section_toolbar_item_copy');
-        if (copyBtn) {
-            copyBtn.click();
-            setTimeout(async () => {
-                try {
-                    const text = await navigator.clipboard.readText();
-                    if (text?.trim()) {
-                        lastCopiedText = text.trim();
-                        wrState.lastUnderlineText = text.trim();
-                        console.log('[WR] 写想法前复制，保存文字:', lastCopiedText.slice(0, 50));
-                    }
-                } catch (e) {}
-            }, 100);
-        }
+        const copyBtn = getToolbarBtn('copy');
+        if (copyBtn) copyBtn.click();
     }
 }, true);
 
