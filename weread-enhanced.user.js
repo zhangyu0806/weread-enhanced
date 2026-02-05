@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.5.0
+// @version      3.5.1
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -46,7 +46,8 @@ let immersiveMode = GM_getValue("immersiveMode", false);
 let spacePageEnabled = GM_getValue("spacePageEnabled", true);
 let autoReadEnabled = GM_getValue("autoReadEnabled", false);
 let flomoTags = GM_getValue("flomoTags", "#书摘");
-let flomoTemplate = GM_getValue("flomoTemplate", "{{tags}} #{{bookName}}\n\n{{selectedText}}\n\n💭 {{thought}}");
+let flomoTemplateExcerpt = GM_getValue("flomoTemplateExcerpt", "{{tags}}/{{bookName}}\n\n{{selectedText}}");
+let flomoTemplateThought = GM_getValue("flomoTemplateThought", "{{tags}}/{{bookName}}\n\n{{selectedText}}\n\n💭 {{thought}}");
 let flomoApiUrl = GM_getValue("flomoApiUrl", "");
 
 let autoReadTimer = null;
@@ -215,19 +216,13 @@ function showToast(msg) {
 }
 
 function processTemplate(template, data) {
-    let result = template
+    return template
         .replace(/\{\{selectedText\}\}/g, data.selectedText || '')
+        .replace(/\{\{thought\}\}/g, data.thought || '')
         .replace(/\{\{bookName\}\}/g, data.bookName || '')
         .replace(/\{\{chapter\}\}/g, data.chapter || '')
-        .replace(/\{\{tags\}\}/g, flomoTags);
-    
-    if (data.thought) {
-        result = result.replace(/\{\{thought\}\}/g, data.thought);
-    } else {
-        result = result.replace(/💭\s*\{\{thought\}\}/g, '').replace(/\{\{thought\}\}/g, '');
-    }
-    
-    return result.trim();
+        .replace(/\{\{tags\}\}/g, flomoTags)
+        .trim();
 }
 
 function clickToolbarButton(selector) {
@@ -343,7 +338,8 @@ function sendToFlomo(text, bookInfo) {
         showToast("请先在设置面板配置 Flomo API URL");
         return;
     }
-    const content = processTemplate(flomoTemplate, { selectedText: text, ...bookInfo });
+    const template = bookInfo.thought ? flomoTemplateThought : flomoTemplateExcerpt;
+    const content = processTemplate(template, { selectedText: text, ...bookInfo });
     showToast("正在发送到 Flomo...");
     GM_xmlhttpRequest({
         method: "POST",
@@ -635,8 +631,12 @@ function createPanel() {
                     <input type="text" id="wr-flomo-tags" value="${flomoTags}" placeholder="#书摘">
                 </div>
                 <div class="wr-input-group">
-                    <label>模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}}, {{thought}})</label>
-                    <input type="text" id="wr-flomo-template" value="${flomoTemplate.replace(/\n/g, '\\n')}">
+                    <label>摘抄模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}})</label>
+                    <input type="text" id="wr-flomo-template-excerpt" value="${flomoTemplateExcerpt.replace(/\n/g, '\\n')}">
+                </div>
+                <div class="wr-input-group">
+                    <label>想法模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}}, {{thought}})</label>
+                    <input type="text" id="wr-flomo-template-thought" value="${flomoTemplateThought.replace(/\n/g, '\\n')}">
                 </div>
             </div>
             <div class="wr-section">
@@ -701,9 +701,13 @@ function createPanel() {
         flomoTags = e.target.value;
         GM_setValue("flomoTags", flomoTags);
     };
-    document.getElementById('wr-flomo-template').onchange = (e) => {
-        flomoTemplate = e.target.value.replace(/\\n/g, '\n');
-        GM_setValue("flomoTemplate", flomoTemplate);
+    document.getElementById('wr-flomo-template-excerpt').onchange = (e) => {
+        flomoTemplateExcerpt = e.target.value.replace(/\\n/g, '\n');
+        GM_setValue("flomoTemplateExcerpt", flomoTemplateExcerpt);
+    };
+    document.getElementById('wr-flomo-template-thought').onchange = (e) => {
+        flomoTemplateThought = e.target.value.replace(/\\n/g, '\n');
+        GM_setValue("flomoTemplateThought", flomoTemplateThought);
     };
     document.getElementById('wr-notion-key').onchange = (e) => {
         notionApiKey = e.target.value;
@@ -1145,7 +1149,7 @@ window.addEventListener('keydown', (e) => {
             
             console.log('[WR] selectedText:', selectedText);
             const bookInfo = getBookInfo();
-            const content = processTemplate(flomoTemplate, { selectedText, ...bookInfo });
+            const content = processTemplate(flomoTemplateExcerpt, { selectedText, ...bookInfo });
             wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
             GM_setClipboard(content);
             sendToFlomo(selectedText, bookInfo);
