@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.9
+// @version      3.5.0
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -215,12 +215,19 @@ function showToast(msg) {
 }
 
 function processTemplate(template, data) {
-    return template
+    let result = template
         .replace(/\{\{selectedText\}\}/g, data.selectedText || '')
-        .replace(/\{\{thought\}\}/g, data.thought || '')
         .replace(/\{\{bookName\}\}/g, data.bookName || '')
         .replace(/\{\{chapter\}\}/g, data.chapter || '')
         .replace(/\{\{tags\}\}/g, flomoTags);
+    
+    if (data.thought) {
+        result = result.replace(/\{\{thought\}\}/g, data.thought);
+    } else {
+        result = result.replace(/💭\s*\{\{thought\}\}/g, '').replace(/\{\{thought\}\}/g, '');
+    }
+    
+    return result.trim();
 }
 
 function clickToolbarButton(selector) {
@@ -594,6 +601,7 @@ function createPanel() {
                     <p>• Esc 关闭想法弹窗</p>
                     <p><b>笔记同步：</b></p>
                     <p>• Ctrl+Shift+Alt+J 发送到 Flomo</p>
+                    <p>• 层级标签：标签填 #书摘，模板填 {{tags}}/{{bookName}}</p>
                     <p>• Ctrl+Shift+Alt+N 发送到 Notion</p>
                     <p>• Ctrl+Shift+Alt+O 发送到 Obsidian</p>
                     <p>• Ctrl+Shift+Alt+W 发送到 Webhook</p>
@@ -884,21 +892,8 @@ function wrShouldIgnoreKeyEventTarget(target) {
     return false;
 }
 
-function wrIsActionKeyCode(e) {
-    const code = e.code;
-    return code === 'Digit1' || code === 'Digit2' || code === 'Digit3' || code === 'Digit4' || code === 'Digit5' || code === 'Backspace';
-}
-
-function wrGetActionFromCode(code) {
-    const map = {
-        'Digit1': 'copy',
-        'Digit2': 'underlineBg',
-        'Digit3': 'underlineWave',
-        'Digit4': 'underlineStraight',
-        'Digit5': 'review',
-        'Backspace': 'removeUnderline'
-    };
-    return map[code] || null;
+function wrIsActionKeyCode(keyCode) {
+    return keyCode === 49 || keyCode === 50 || keyCode === 51 || keyCode === 52 || keyCode === 53 || keyCode === 8;
 }
 
 function wrHasNoModifiers(e) {
@@ -1059,33 +1054,35 @@ window.addEventListener('keydown', (e) => {
         }
     }
 
-    if (wrHasNoModifiers(e) && wrIsActionKeyCode(e)) {
+    if (wrHasNoModifiers(e) && wrIsActionKeyCode(e.keyCode)) {
         const toolbarReady = wrHasToolbar();
-        console.log('[WR] code:', e.code, 'toolbarReady:', toolbarReady);
+        console.log('[WR] keyCode:', e.keyCode, 'toolbarReady:', toolbarReady);
         if (toolbarReady) {
             e.preventDefault();
             e.stopImmediatePropagation();
+            wrRefreshSelection();
+            wrRestoreSelection();
 
-            const action = wrGetActionFromCode(e.code);
-            if (action === 'copy') {
-                const btn = getToolbarBtn('copy');
+            const keyCode = e.keyCode;
+            if (keyCode === 49) {
+                const btn = getToolbarBtn('copy') || document.querySelector('.wr_copy');
                 if (btn) btn.click();
-            } else if (action === 'underlineBg') {
+            } else if (keyCode === 50) {
                 const btn = getToolbarBtn('underlineBg');
                 if (btn) btn.click();
-            } else if (action === 'underlineWave') {
+            } else if (keyCode === 51) {
                 const btn = getToolbarBtn('underlineWave');
                 if (btn) btn.click();
-            } else if (action === 'underlineStraight') {
+            } else if (keyCode === 52) {
                 const btn = getToolbarBtn('underlineStraight');
                 if (btn) btn.click();
-            } else if (action === 'review') {
+            } else if (keyCode === 53) {
                 getSelectionViaClipboard().then(text => {
                     if (text) wrState.lastUnderlineText = text;
                 });
-                const btn = getToolbarBtn('review');
+                const btn = getToolbarBtn('review') || document.querySelector('.toolbarItem.review');
                 if (btn) btn.click();
-            } else if (action === 'removeUnderline') {
+            } else if (keyCode === 8) {
                 const btn = getToolbarBtn('removeUnderline');
                 if (btn) btn.click();
                 document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
@@ -1102,33 +1099,34 @@ window.addEventListener('keydown', (e) => {
     const toolbarReady = wrHasToolbar();
     if (toolbarReady) wrRefreshButtons();
 
+    const keyCode = e.keyCode;
     const hasCachedSelection = !!(wrState.selectedRange || wrState.selectedText);
-    const shouldHandleActionKey = wrIsActionKeyCode(e) && (toolbarReady || hasCachedSelection);
+    const shouldHandleActionKey = wrIsActionKeyCode(keyCode) && (toolbarReady || hasCachedSelection);
 
     if (shouldHandleActionKey) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        wrRestoreSelection();
 
-        const action = wrGetActionFromCode(e.code);
-        if (action === 'copy') {
-            const btn = wrState.buttons.copy || getToolbarBtn('copy');
+        if (keyCode === 49) {
+            const btn = wrState.buttons.copy || getToolbarBtn('copy') || document.querySelector('.wr_copy');
             if (btn) btn.click();
-        } else if (action === 'underlineBg') {
+        } else if (keyCode === 50) {
             const btn = wrState.buttons.underlineBg || getToolbarBtn('underlineBg');
             if (btn) btn.click();
-        } else if (action === 'underlineWave') {
+        } else if (keyCode === 51) {
             const btn = wrState.buttons.underlineWave || getToolbarBtn('underlineWave');
             if (btn) btn.click();
-        } else if (action === 'underlineStraight') {
+        } else if (keyCode === 52) {
             const btn = wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight');
             if (btn) btn.click();
-        } else if (action === 'review') {
+        } else if (keyCode === 53) {
             getSelectionViaClipboard().then(text => {
                 if (text) wrState.lastUnderlineText = text;
             });
-            const btn = wrState.buttons.review || getToolbarBtn('review');
+            const btn = wrState.buttons.review || getToolbarBtn('review') || document.querySelector('.toolbarItem.review');
             if (btn) btn.click();
-        } else if (action === 'removeUnderline') {
+        } else if (keyCode === 8) {
             const btn = wrState.buttons.removeUnderline || getToolbarBtn('removeUnderline');
             if (btn) btn.click();
             document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
