@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.4
+// @version      3.4.5
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -1047,20 +1047,26 @@ window.addEventListener('keydown', (e) => {
 
             const keyCode = e.keyCode;
             if (keyCode === 49) {
-                wrClickNextFrame(getToolbarBtn('copy'));
+                const btn = getToolbarBtn('copy');
+                if (btn) btn.click();
             } else if (keyCode === 50) {
-                wrClickNextFrame(getToolbarBtn('underlineBg'));
+                const btn = getToolbarBtn('underlineBg');
+                if (btn) btn.click();
             } else if (keyCode === 51) {
-                wrClickNextFrame(getToolbarBtn('underlineWave'));
+                const btn = getToolbarBtn('underlineWave');
+                if (btn) btn.click();
             } else if (keyCode === 52) {
-                wrClickNextFrame(getToolbarBtn('underlineStraight'));
+                const btn = getToolbarBtn('underlineStraight');
+                if (btn) btn.click();
             } else if (keyCode === 53) {
                 getSelectionViaClipboard().then(text => {
                     if (text) wrState.lastUnderlineText = text;
                 });
-                wrClickNextFrame(getToolbarBtn('review'));
+                const btn = getToolbarBtn('review');
+                if (btn) btn.click();
             } else if (keyCode === 8) {
-                wrClickNextFrame(getToolbarBtn('removeUnderline'));
+                const btn = getToolbarBtn('removeUnderline');
+                if (btn) btn.click();
                 document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
             }
             return;
@@ -1085,20 +1091,26 @@ window.addEventListener('keydown', (e) => {
         wrRestoreSelection();
 
         if (keyCode === 49) {
-            wrClickNextFrame(wrState.buttons.copy || getToolbarBtn('copy'));
+            const btn = wrState.buttons.copy || getToolbarBtn('copy');
+            if (btn) btn.click();
         } else if (keyCode === 50) {
-            wrClickNextFrame(wrState.buttons.underlineBg || getToolbarBtn('underlineBg'));
+            const btn = wrState.buttons.underlineBg || getToolbarBtn('underlineBg');
+            if (btn) btn.click();
         } else if (keyCode === 51) {
-            wrClickNextFrame(wrState.buttons.underlineWave || getToolbarBtn('underlineWave'));
+            const btn = wrState.buttons.underlineWave || getToolbarBtn('underlineWave');
+            if (btn) btn.click();
         } else if (keyCode === 52) {
-            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
+            const btn = wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight');
+            if (btn) btn.click();
         } else if (keyCode === 53) {
             getSelectionViaClipboard().then(text => {
                 if (text) wrState.lastUnderlineText = text;
             });
-            wrClickNextFrame(wrState.buttons.review || getToolbarBtn('review'));
+            const btn = wrState.buttons.review || getToolbarBtn('review');
+            if (btn) btn.click();
         } else if (keyCode === 8) {
-            wrClickNextFrame(wrState.buttons.removeUnderline || getToolbarBtn('removeUnderline'));
+            const btn = wrState.buttons.removeUnderline || getToolbarBtn('removeUnderline');
+            if (btn) btn.click();
             document.querySelector('.readerReviewDetail_item .actions .actionItem')?.click();
         }
     }
