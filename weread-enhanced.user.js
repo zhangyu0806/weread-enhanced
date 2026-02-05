@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.4.5
+// @version      3.4.6
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -916,12 +916,22 @@ document.addEventListener('copy', (e) => {
     }, 50);
 });
 
-// 监听写想法按钮点击，先触发复制
-document.addEventListener('click', (e) => {
+// 监听写想法按钮点击，先触发复制并等待
+document.addEventListener('click', async (e) => {
     const reviewBtn = e.target.closest('.toolbarItem.review, .review_section_toolbar_item_review');
     if (reviewBtn) {
         const copyBtn = getToolbarBtn('copy');
-        if (copyBtn) copyBtn.click();
+        if (copyBtn) {
+            copyBtn.click();
+            await new Promise(r => setTimeout(r, 200));
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text?.trim()) {
+                    lastCopiedText = text.trim();
+                    wrState.lastUnderlineText = text.trim();
+                }
+            } catch (e) {}
+        }
     }
 }, true);
 
