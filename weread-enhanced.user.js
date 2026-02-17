@@ -3,7 +3,7 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.5.1
+// @version      3.5.2
 // @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
 // @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
 // @author       zhangyu0806
@@ -156,6 +156,13 @@ function applyWidth() {
     if (w.width) {
         GM_addStyle(`
             .readerContent .app_content, .readerTopBar { max-width: ${w.width} !important; }
+        `);
+        GM_addStyle(`
+            .readerControls {
+                right: 20px !important;
+                left: auto !important;
+                margin-left: 0 !important;
+            }
         `);
     }
 }
