@@ -63,6 +63,7 @@
 | 快捷键 | 功能 |
 |--------|------|
 | `Ctrl+Shift+Alt+J` | 发送到 Flomo |
+| `Ctrl+Shift+Alt+G` | 发送到 get笔记（得到大脑） |
 | `Ctrl+Shift+Alt+N` | 发送到 Notion |
 | `Ctrl+Shift+Alt+O` | 发送到 Obsidian |
 | `Ctrl+Shift+Alt+W` | 发送到 Webhook |
@@ -92,9 +93,9 @@
 
 ### 笔记同步（新增）
 
-- 支持 Flomo / Notion / Obsidian / Webhook
+- 支持 Flomo / get笔记（得到大脑）/ Notion / Obsidian / Webhook
 - 摘抄和想法使用独立模板
-- 点击发表自动同步想法到 Flomo
+- 点击发表自动同步想法到 Flomo 和 get笔记
 
 ## 安装
 
@@ -117,6 +118,13 @@
 ### 获取 Flomo API
 
 Flomo → 设置 → API → 复制地址 → 粘贴到设置面板
+
+### 获取 get笔记 API
+
+1. 需 get笔记（得到大脑）会员账号
+2. 打开 [get笔记开放平台](https://www.biji.com/openapi) → 创建应用
+3. 复制 API Key（`gk_live_` 开头）和 Client ID（`cli_` 开头）
+4. 粘贴到设置面板的 get笔记区域，标签用空格或逗号分隔（无需加 #）
 
 ## 模板设置
 

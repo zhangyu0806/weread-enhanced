@@ -3,9 +3,9 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.5.2
-// @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/Notion/Obsidian
-// @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/Notion/Obsidian
+// @version      3.6.0
+// @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/get笔记/Notion/Obsidian
+// @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/get笔记/Notion/Obsidian
 // @author       zhangyu0806
 // @match        https://weread.qq.com/web/reader/*
 // @license      MIT
@@ -63,6 +63,13 @@ let obsidianVault = GM_getValue("obsidianVault", "");
 let webhookEnabled = GM_getValue("webhookEnabled", false);
 let webhookUrl = GM_getValue("webhookUrl", "");
 
+let getnoteEnabled = GM_getValue("getnoteEnabled", false);
+let getnoteApiKey = GM_getValue("getnoteApiKey", "");
+let getnoteClientId = GM_getValue("getnoteClientId", "");
+let getnoteTags = GM_getValue("getnoteTags", "书摘");
+let getnoteTemplateExcerpt = GM_getValue("getnoteTemplateExcerpt", "{{selectedText}}\n\n——《{{bookName}}》{{chapter}}");
+let getnoteTemplateThought = GM_getValue("getnoteTemplateThought", "{{selectedText}}\n\n💭 {{thought}}\n\n——《{{bookName}}》{{chapter}}");
+
 let panelTriggerMode = GM_getValue("panelTriggerMode", "edge");
 
 const defaultHotkeys = {
@@ -70,6 +77,7 @@ const defaultHotkeys = {
     sendToNotion: { key: 'KeyN', ctrl: true, shift: true, alt: true, meta: false },
     sendToObsidian: { key: 'KeyO', ctrl: true, shift: true, alt: true, meta: false },
     sendToWebhook: { key: 'KeyW', ctrl: true, shift: true, alt: true, meta: false },
+    sendToGetnote: { key: 'KeyG', ctrl: true, shift: true, alt: true, meta: false },
     copyFormatted: { key: 'KeyC', ctrl: true, shift: true, alt: false, meta: false },
     underlineStraight: { key: 'Digit4', ctrl: false, shift: false, alt: false, meta: false },
     underlineBg: { key: 'Digit2', ctrl: false, shift: false, alt: false, meta: false },
@@ -88,6 +96,7 @@ const hotkeyLabels = {
     sendToNotion: '发送到 Notion',
     sendToObsidian: '发送到 Obsidian',
     sendToWebhook: '发送到 Webhook',
+    sendToGetnote: '发送到 get笔记',
     copyFormatted: '复制格式化',
     underlineStraight: '直线',
     underlineBg: '马克笔',
@@ -340,6 +349,23 @@ GM_registerMenuCommand("Webhook：" + (webhookEnabled ? "开启" : "关闭"), ()
     }
 });
 
+GM_registerMenuCommand("get笔记：" + (getnoteEnabled ? "开启" : "关闭"), () => {
+    getnoteEnabled = !getnoteEnabled;
+    GM_setValue("getnoteEnabled", getnoteEnabled);
+    if (getnoteEnabled && !getnoteApiKey) {
+        const key = prompt("请输入 get笔记 API Key（gk_live_ 开头）");
+        if (key) {
+            getnoteApiKey = key.trim();
+            GM_setValue("getnoteApiKey", getnoteApiKey);
+        }
+        const cid = prompt("请输入 get笔记 Client ID（cli_ 开头）");
+        if (cid) {
+            getnoteClientId = cid.trim();
+            GM_setValue("getnoteClientId", getnoteClientId);
+        }
+    }
+});
+
 function sendToFlomo(text, bookInfo) {
     if (!flomoApiUrl) {
         showToast("请先在设置面板配置 Flomo API URL");
@@ -429,6 +455,57 @@ function sendToWebhook(text, bookInfo) {
         }),
         onload: () => showToast("Webhook 发送成功"),
         onerror: () => showToast("Webhook 发送失败")
+    });
+}
+
+function parseTags(raw) {
+    if (!raw) return [];
+    return raw
+        .split(/[\s,，#]+/)
+        .map(t => t.trim())
+        .filter(Boolean);
+}
+
+function sendToGetnote(text, bookInfo) {
+    if (!getnoteApiKey || !getnoteClientId) {
+        showToast("请先配置 get笔记 API Key 和 Client ID");
+        return;
+    }
+    const template = bookInfo.thought ? getnoteTemplateThought : getnoteTemplateExcerpt;
+    const content = processTemplate(template, { selectedText: text, ...bookInfo });
+    const tags = parseTags(getnoteTags);
+    const title = (bookInfo.bookName || "微信读书笔记").slice(0, 100);
+    showToast("正在发送到 get笔记...");
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: "https://openapi.biji.com/open/api/v1/resource/note/save",
+        headers: {
+            "Authorization": getnoteApiKey,
+            "X-Client-ID": getnoteClientId,
+            "Content-Type": "application/json"
+        },
+        data: JSON.stringify({
+            note_type: "plain_text",
+            title: title,
+            content: content,
+            tags: tags
+        }),
+        onload: (res) => {
+            let ok = res.status >= 200 && res.status < 300;
+            try {
+                const body = JSON.parse(res.responseText);
+                if (body && body.success === false) ok = false;
+                if (ok) {
+                    showToast("已发送到 get笔记");
+                } else {
+                    const code = body?.error?.code || body?.code;
+                    showToast("get笔记发送失败" + (code ? "（" + code + "）" : "：" + res.status));
+                }
+            } catch (_) {
+                showToast(ok ? "已发送到 get笔记" : "get笔记发送失败: " + res.status);
+            }
+        },
+        onerror: () => showToast("get笔记网络错误")
     });
 }
 
@@ -605,6 +682,7 @@ function createPanel() {
                     <p><b>笔记同步：</b></p>
                     <p>• Ctrl+Shift+Alt+J 发送到 Flomo</p>
                     <p>• 层级标签：标签填 #书摘，模板填 {{tags}}/{{bookName}}</p>
+                    <p>• Ctrl+Shift+Alt+G 发送到 get笔记 (得到大脑)</p>
                     <p>• Ctrl+Shift+Alt+N 发送到 Notion</p>
                     <p>• Ctrl+Shift+Alt+O 发送到 Obsidian</p>
                     <p>• Ctrl+Shift+Alt+W 发送到 Webhook</p>
@@ -675,6 +753,30 @@ function createPanel() {
                 </div>
             </div>
             <div class="wr-section">
+                <div class="wr-section-title">get笔记 (得到大脑) <a href="https://www.biji.com/openapi" target="_blank" class="wr-help-link">创建应用</a></div>
+                <div class="wr-help-text">1. 需 get笔记会员<br>2. 打开开放平台创建应用，获取 API Key 和 Client ID<br>3. 快捷键 Ctrl+Shift+Alt+G 发送</div>
+                <div class="wr-input-group">
+                    <label>API Key</label>
+                    <input type="password" id="wr-getnote-key" value="${getnoteApiKey}" placeholder="gk_live_...">
+                </div>
+                <div class="wr-input-group">
+                    <label>Client ID</label>
+                    <input type="text" id="wr-getnote-cid" value="${getnoteClientId}" placeholder="cli_...">
+                </div>
+                <div class="wr-input-group">
+                    <label>标签 (空格或逗号分隔，无需 #)</label>
+                    <input type="text" id="wr-getnote-tags" value="${getnoteTags}" placeholder="书摘 微信读书">
+                </div>
+                <div class="wr-input-group">
+                    <label>摘抄模板 (可用: {{bookName}}, {{chapter}}, {{selectedText}})</label>
+                    <input type="text" id="wr-getnote-template-excerpt" value="${getnoteTemplateExcerpt.replace(/\n/g, '\\n')}">
+                </div>
+                <div class="wr-input-group">
+                    <label>想法模板 (可用: {{bookName}}, {{chapter}}, {{selectedText}}, {{thought}})</label>
+                    <input type="text" id="wr-getnote-template-thought" value="${getnoteTemplateThought.replace(/\n/g, '\\n')}">
+                </div>
+            </div>
+            <div class="wr-section">
                 <div class="wr-section-title">快捷键 (点击修改)</div>
                 ${hotkeyHTML}
             </div>
@@ -739,6 +841,31 @@ function createPanel() {
         GM_setValue("webhookEnabled", webhookEnabled);
     };
 
+    document.getElementById('wr-getnote-key').onchange = (e) => {
+        getnoteApiKey = e.target.value.trim();
+        GM_setValue("getnoteApiKey", getnoteApiKey);
+        getnoteEnabled = !!(getnoteApiKey && getnoteClientId);
+        GM_setValue("getnoteEnabled", getnoteEnabled);
+    };
+    document.getElementById('wr-getnote-cid').onchange = (e) => {
+        getnoteClientId = e.target.value.trim();
+        GM_setValue("getnoteClientId", getnoteClientId);
+        getnoteEnabled = !!(getnoteApiKey && getnoteClientId);
+        GM_setValue("getnoteEnabled", getnoteEnabled);
+    };
+    document.getElementById('wr-getnote-tags').onchange = (e) => {
+        getnoteTags = e.target.value;
+        GM_setValue("getnoteTags", getnoteTags);
+    };
+    document.getElementById('wr-getnote-template-excerpt').onchange = (e) => {
+        getnoteTemplateExcerpt = e.target.value.replace(/\\n/g, '\n');
+        GM_setValue("getnoteTemplateExcerpt", getnoteTemplateExcerpt);
+    };
+    document.getElementById('wr-getnote-template-thought').onchange = (e) => {
+        getnoteTemplateThought = e.target.value.replace(/\\n/g, '\n');
+        GM_setValue("getnoteTemplateThought", getnoteTemplateThought);
+    };
+
     panel.querySelectorAll('.wr-hotkey-value').forEach(el => {
         el.onclick = () => {
             const name = el.dataset.name;
@@ -801,6 +928,11 @@ document.addEventListener('click', async (e) => {
         const bookInfo = getBookInfo();
         sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
         console.log('[WR] 点击发表，同步到 Flomo:', { selectedText, thoughtText });
+    }
+    if (getnoteEnabled && getnoteApiKey && getnoteClientId && (thoughtText || selectedText)) {
+        const bookInfo = getBookInfo();
+        sendToGetnote(selectedText, { ...bookInfo, thought: thoughtText });
+        console.log('[WR] 点击发表，同步到 get笔记:', { selectedText, thoughtText });
     }
 }, true);
 
@@ -1035,6 +1167,11 @@ window.addEventListener('keydown', (e) => {
                 sendToFlomo(selectedText, { ...bookInfo, thought: thoughtText });
                 console.log('[WR] Ctrl+Enter 发表，同步到 Flomo:', { selectedText, thoughtText });
             }
+            if (getnoteEnabled && getnoteApiKey && getnoteClientId && (thoughtText || selectedText)) {
+                const bookInfo = getBookInfo();
+                sendToGetnote(selectedText, { ...bookInfo, thought: thoughtText });
+                console.log('[WR] Ctrl+Enter 发表，同步到 get笔记:', { selectedText, thoughtText });
+            }
             return;
         } else if (e.keyCode === 27) {
             const closeBtn = document.querySelector('.reader_float_panel_header_closeBtn, .readerWriteReviewPanel .closeButton');
@@ -1230,6 +1367,21 @@ window.addEventListener('keydown', (e) => {
         })();
     }
 
+    if (matchHotkey(e, hotkeys.sendToGetnote)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!requireSelectionOrToast()) return;
+
+        (async () => {
+            const selectedText = await requireSelectionAsync();
+            if (!selectedText) return;
+
+            const bookInfo = getBookInfo();
+            wrClickNextFrame(wrState.buttons.underlineStraight || getToolbarBtn('underlineStraight'));
+            sendToGetnote(selectedText, bookInfo);
+        })();
+    }
+
     if (e.code === 'Numpad0') {
         if (autoReadTimer) {
             stopAutoRead();
@@ -1241,4 +1393,4 @@ window.addEventListener('keydown', (e) => {
     }
 }, true);
 
-console.log('[微信读书增强] 已加载 v3.3.0');
+console.log('[微信读书增强] 已加载 v3.6.0');
