@@ -3,9 +3,9 @@
 // @name:en      WeRead Enhanced
 // @icon         https://weread.qq.com/favicon.ico
 // @namespace    https://github.com/zhangyu0806/weread-enhanced
-// @version      3.6.0
-// @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/get笔记/Notion/Obsidian
-// @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/get笔记/Notion/Obsidian
+// @version      3.7.0
+// @description  微信读书网页版增强：护眼背景色、宽屏模式、自动翻页、沉浸阅读、快捷键标注（1复制/2马克笔/3波浪线/4直线/5想法）、一键发送到Flomo/get笔记/Notion/Obsidian，get笔记支持每条/整本两种保存模式与知识库归类
+// @description:en WeRead web enhancement: eye-care background, wide mode, auto page turn, immersive reading, hotkeys for annotations, sync to Flomo/get笔记/Notion/Obsidian, get笔记 supports per-note/per-book modes and knowledge base
 // @author       zhangyu0806
 // @match        https://weread.qq.com/web/reader/*
 // @license      MIT
@@ -69,6 +69,15 @@ let getnoteClientId = GM_getValue("getnoteClientId", "");
 let getnoteTags = GM_getValue("getnoteTags", "书摘");
 let getnoteTemplateExcerpt = GM_getValue("getnoteTemplateExcerpt", "{{selectedText}}\n\n——《{{bookName}}》{{chapter}}");
 let getnoteTemplateThought = GM_getValue("getnoteTemplateThought", "{{selectedText}}\n\n💭 {{thought}}\n\n——《{{bookName}}》{{chapter}}");
+// get笔记 保存模式：'A' = 每条摘抄一条笔记；'B' = 一本书一条笔记（模拟追加）
+let getnoteSaveMode = GM_getValue("getnoteSaveMode", "A");
+// 自动按书名加标签（在 getnoteTags 基础上额外追加书名作为标签）
+let getnoteAutoBookTag = GM_getValue("getnoteAutoBookTag", true);
+// 归类到的知识库（topic）
+let getnoteTopicId = GM_getValue("getnoteTopicId", "");
+let getnoteTopicName = GM_getValue("getnoteTopicName", "");
+// 模式 B 的「书名 -> note_id」映射，用于把同一本书的摘抄追加到同一条笔记
+let getnoteBookNoteMap = GM_getValue("getnoteBookNoteMap", {});
 
 let panelTriggerMode = GM_getValue("panelTriggerMode", "edge");
 
@@ -237,7 +246,7 @@ function processTemplate(template, data) {
         .replace(/\{\{thought\}\}/g, data.thought || '')
         .replace(/\{\{bookName\}\}/g, data.bookName || '')
         .replace(/\{\{chapter\}\}/g, data.chapter || '')
-        .replace(/\{\{tags\}\}/g, flomoTags)
+        .replace(/\{\{tags\}\}/g, data.tags != null ? data.tags : flomoTags)
         .trim();
 }
 
@@ -466,46 +475,156 @@ function parseTags(raw) {
         .filter(Boolean);
 }
 
+function getnoteHeaders() {
+    return {
+        "Authorization": getnoteApiKey,
+        "X-Client-ID": getnoteClientId,
+        "Content-Type": "application/json"
+    };
+}
+
+function fetchGetnoteTopics() {
+    return new Promise((resolve, reject) => {
+        if (!getnoteApiKey || !getnoteClientId) {
+            reject(new Error("未配置 API Key / Client ID"));
+            return;
+        }
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: "https://openapi.biji.com/open/api/v1/resource/knowledge/list?page=1&size=100",
+            headers: getnoteHeaders(),
+            onload: (res) => {
+                try {
+                    const body = JSON.parse(res.responseText);
+                    const topics = body?.data?.topics || body?.data?.list || [];
+                    resolve(topics.map(t => ({ id: t.topic_id || t.id, name: t.name || t.title || "未命名" })));
+                } catch (e) {
+                    reject(e);
+                }
+            },
+            onerror: () => reject(new Error("网络错误"))
+        });
+    });
+}
+
+function buildGetnoteTags(bookName) {
+    const tags = parseTags(getnoteTags);
+    if (getnoteAutoBookTag && bookName) {
+        const clean = bookName.trim();
+        if (clean && !tags.includes(clean)) tags.push(clean);
+    }
+    return tags;
+}
+
+function getnoteSaveNote({ title, content, tags }, onDone) {
+    const payload = { note_type: "plain_text", title, content, tags };
+    if (getnoteTopicId) payload.topic_id = getnoteTopicId;
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: "https://openapi.biji.com/open/api/v1/resource/note/save",
+        headers: getnoteHeaders(),
+        data: JSON.stringify(payload),
+        onload: (res) => {
+            let ok = res.status >= 200 && res.status < 300;
+            let noteId = null;
+            try {
+                const body = JSON.parse(res.responseText);
+                if (body && body.success === false) ok = false;
+                noteId = body?.data?.note_id || null;
+            } catch (_) { /* 非 JSON 响应，按 HTTP 状态判定 */ }
+            onDone(ok, noteId);
+        },
+        onerror: () => onDone(false, null)
+    });
+}
+
+function getnoteFetchDetail(noteId) {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: "https://openapi.biji.com/open/api/v1/resource/note/detail?id=" + encodeURIComponent(noteId),
+            headers: getnoteHeaders(),
+            onload: (res) => {
+                try {
+                    const body = JSON.parse(res.responseText);
+                    const data = body?.data || {};
+                    resolve({
+                        content: data.content || "",
+                        title: data.title || "",
+                        tags: (data.tags || []).map(t => (typeof t === "string" ? t : t.name)).filter(Boolean)
+                    });
+                } catch (e) { reject(e); }
+            },
+            onerror: () => reject(new Error("网络错误"))
+        });
+    });
+}
+
+function getnoteUpdateNote({ noteId, title, content, tags }, onDone) {
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: "https://openapi.biji.com/open/api/v1/resource/note/update",
+        headers: getnoteHeaders(),
+        data: JSON.stringify({ note_id: noteId, title, content, tags }),
+        onload: (res) => {
+            let ok = res.status >= 200 && res.status < 300;
+            try {
+                const body = JSON.parse(res.responseText);
+                if (body && body.success === false) ok = false;
+            } catch (_) { /* 非 JSON 响应，按 HTTP 状态判定 */ }
+            onDone(ok);
+        },
+        onerror: () => onDone(false)
+    });
+}
+
 function sendToGetnote(text, bookInfo) {
     if (!getnoteApiKey || !getnoteClientId) {
         showToast("请先配置 get笔记 API Key 和 Client ID");
         return;
     }
     const template = bookInfo.thought ? getnoteTemplateThought : getnoteTemplateExcerpt;
-    const content = processTemplate(template, { selectedText: text, ...bookInfo });
-    const tags = parseTags(getnoteTags);
-    const title = (bookInfo.bookName || "微信读书笔记").slice(0, 100);
+    const tagsStr = getnoteTags;
+    const content = processTemplate(template, { selectedText: text, ...bookInfo, tags: tagsStr });
+    const tags = buildGetnoteTags(bookInfo.bookName);
+    const bookName = (bookInfo.bookName || "微信读书笔记").slice(0, 100);
+
+    if (getnoteSaveMode === "B") {
+        const existingId = getnoteBookNoteMap[bookName];
+        if (existingId) {
+            showToast("正在追加到 get笔记...");
+            getnoteFetchDetail(existingId).then(detail => {
+                const sep = "\n\n────────\n\n";
+                const newContent = (detail.content || "") + sep + content;
+                const mergedTags = Array.from(new Set([...(detail.tags || []), ...tags]));
+                getnoteUpdateNote({ noteId: existingId, title: detail.title || ("《" + bookName + "》读书笔记"), content: newContent, tags: mergedTags }, (ok) => {
+                    showToast(ok ? "已追加到 get笔记" : "追加失败，将改为新建");
+                    if (!ok) getnoteCreateForBook(bookName, content, tags);
+                });
+            }).catch(() => {
+                getnoteCreateForBook(bookName, content, tags);
+            });
+            return;
+        }
+        showToast("正在创建 get笔记...");
+        getnoteCreateForBook(bookName, content, tags);
+        return;
+    }
+
     showToast("正在发送到 get笔记...");
-    GM_xmlhttpRequest({
-        method: "POST",
-        url: "https://openapi.biji.com/open/api/v1/resource/note/save",
-        headers: {
-            "Authorization": getnoteApiKey,
-            "X-Client-ID": getnoteClientId,
-            "Content-Type": "application/json"
-        },
-        data: JSON.stringify({
-            note_type: "plain_text",
-            title: title,
-            content: content,
-            tags: tags
-        }),
-        onload: (res) => {
-            let ok = res.status >= 200 && res.status < 300;
-            try {
-                const body = JSON.parse(res.responseText);
-                if (body && body.success === false) ok = false;
-                if (ok) {
-                    showToast("已发送到 get笔记");
-                } else {
-                    const code = body?.error?.code || body?.code;
-                    showToast("get笔记发送失败" + (code ? "（" + code + "）" : "：" + res.status));
-                }
-            } catch (_) {
-                showToast(ok ? "已发送到 get笔记" : "get笔记发送失败: " + res.status);
-            }
-        },
-        onerror: () => showToast("get笔记网络错误")
+    getnoteSaveNote({ title: bookName, content, tags }, (ok) => {
+        showToast(ok ? "已发送到 get笔记" : "get笔记发送失败");
+    });
+}
+
+function getnoteCreateForBook(bookName, content, tags) {
+    const title = "《" + bookName + "》读书笔记";
+    getnoteSaveNote({ title, content, tags }, (ok, noteId) => {
+        if (ok && noteId) {
+            getnoteBookNoteMap[bookName] = noteId;
+            GM_setValue("getnoteBookNoteMap", getnoteBookNoteMap);
+        }
+        showToast(ok ? "已发送到 get笔记" : "get笔记发送失败");
     });
 }
 
@@ -725,6 +844,47 @@ function createPanel() {
                 </div>
             </div>
             <div class="wr-section">
+                <div class="wr-section-title">get笔记 (得到大脑) <a href="https://www.biji.com/openapi" target="_blank" class="wr-help-link">创建应用</a></div>
+                <div class="wr-help-text">1. 需 get笔记会员<br>2. 打开开放平台创建应用，获取 API Key 和 Client ID<br>3. 快捷键 Ctrl+Shift+Alt+G 发送</div>
+                <div class="wr-input-group">
+                    <label>API Key</label>
+                    <input type="password" id="wr-getnote-key" value="${getnoteApiKey}" placeholder="gk_live_...">
+                </div>
+                <div class="wr-input-group">
+                    <label>Client ID</label>
+                    <input type="text" id="wr-getnote-cid" value="${getnoteClientId}" placeholder="cli_...">
+                </div>
+                <div class="wr-input-group">
+                    <label>保存模式</label>
+                    <select id="wr-getnote-mode">
+                        <option value="A" ${getnoteSaveMode === 'A' ? 'selected' : ''}>每条摘抄一条笔记</option>
+                        <option value="B" ${getnoteSaveMode === 'B' ? 'selected' : ''}>一本书一条笔记（追加）</option>
+                    </select>
+                </div>
+                <div class="wr-input-group">
+                    <label>知识库归类 <a href="#" id="wr-getnote-topic-refresh" class="wr-help-link">刷新列表</a></label>
+                    <select id="wr-getnote-topic">
+                        <option value="">不归类</option>
+                        ${getnoteTopicId ? `<option value="${getnoteTopicId}" selected>${getnoteTopicName || getnoteTopicId}</option>` : ''}
+                    </select>
+                </div>
+                <div class="wr-input-group">
+                    <label><input type="checkbox" id="wr-getnote-autobooktag" ${getnoteAutoBookTag ? 'checked' : ''}> 自动把书名加为标签</label>
+                </div>
+                <div class="wr-input-group">
+                    <label>标签 (空格或逗号分隔，无需 #)</label>
+                    <input type="text" id="wr-getnote-tags" value="${getnoteTags}" placeholder="书摘 微信读书">
+                </div>
+                <div class="wr-input-group">
+                    <label>摘抄模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}})</label>
+                    <input type="text" id="wr-getnote-template-excerpt" value="${getnoteTemplateExcerpt.replace(/\n/g, '\\n')}">
+                </div>
+                <div class="wr-input-group">
+                    <label>想法模板 (可用: {{tags}}, {{bookName}}, {{chapter}}, {{selectedText}}, {{thought}})</label>
+                    <input type="text" id="wr-getnote-template-thought" value="${getnoteTemplateThought.replace(/\n/g, '\\n')}">
+                </div>
+            </div>
+            <div class="wr-section">
                 <div class="wr-section-title">Notion <a href="https://www.notion.so/my-integrations" target="_blank" class="wr-help-link">创建 Integration</a></div>
                 <div class="wr-help-text">1. 创建 Integration 获取 API Key<br>2. 在数据库页面 Share → 邀请该 Integration<br>3. 复制数据库链接中的 ID</div>
                 <div class="wr-input-group">
@@ -750,30 +910,6 @@ function createPanel() {
                 <div class="wr-input-group">
                     <label>URL</label>
                     <input type="text" id="wr-webhook-url" value="${webhookUrl}" placeholder="https://...">
-                </div>
-            </div>
-            <div class="wr-section">
-                <div class="wr-section-title">get笔记 (得到大脑) <a href="https://www.biji.com/openapi" target="_blank" class="wr-help-link">创建应用</a></div>
-                <div class="wr-help-text">1. 需 get笔记会员<br>2. 打开开放平台创建应用，获取 API Key 和 Client ID<br>3. 快捷键 Ctrl+Shift+Alt+G 发送</div>
-                <div class="wr-input-group">
-                    <label>API Key</label>
-                    <input type="password" id="wr-getnote-key" value="${getnoteApiKey}" placeholder="gk_live_...">
-                </div>
-                <div class="wr-input-group">
-                    <label>Client ID</label>
-                    <input type="text" id="wr-getnote-cid" value="${getnoteClientId}" placeholder="cli_...">
-                </div>
-                <div class="wr-input-group">
-                    <label>标签 (空格或逗号分隔，无需 #)</label>
-                    <input type="text" id="wr-getnote-tags" value="${getnoteTags}" placeholder="书摘 微信读书">
-                </div>
-                <div class="wr-input-group">
-                    <label>摘抄模板 (可用: {{bookName}}, {{chapter}}, {{selectedText}})</label>
-                    <input type="text" id="wr-getnote-template-excerpt" value="${getnoteTemplateExcerpt.replace(/\n/g, '\\n')}">
-                </div>
-                <div class="wr-input-group">
-                    <label>想法模板 (可用: {{bookName}}, {{chapter}}, {{selectedText}}, {{thought}})</label>
-                    <input type="text" id="wr-getnote-template-thought" value="${getnoteTemplateThought.replace(/\n/g, '\\n')}">
                 </div>
             </div>
             <div class="wr-section">
@@ -852,6 +988,30 @@ function createPanel() {
         GM_setValue("getnoteClientId", getnoteClientId);
         getnoteEnabled = !!(getnoteApiKey && getnoteClientId);
         GM_setValue("getnoteEnabled", getnoteEnabled);
+    };
+    document.getElementById('wr-getnote-mode').onchange = (e) => {
+        getnoteSaveMode = e.target.value;
+        GM_setValue("getnoteSaveMode", getnoteSaveMode);
+    };
+    document.getElementById('wr-getnote-autobooktag').onchange = (e) => {
+        getnoteAutoBookTag = e.target.checked;
+        GM_setValue("getnoteAutoBookTag", getnoteAutoBookTag);
+    };
+    document.getElementById('wr-getnote-topic').onchange = (e) => {
+        getnoteTopicId = e.target.value;
+        getnoteTopicName = e.target.options[e.target.selectedIndex]?.text || "";
+        GM_setValue("getnoteTopicId", getnoteTopicId);
+        GM_setValue("getnoteTopicName", getnoteTopicName);
+    };
+    document.getElementById('wr-getnote-topic-refresh').onclick = (ev) => {
+        ev.preventDefault();
+        const sel = document.getElementById('wr-getnote-topic');
+        showToast("正在加载知识库列表...");
+        fetchGetnoteTopics().then(topics => {
+            sel.innerHTML = '<option value="">不归类</option>' +
+                topics.map(t => `<option value="${t.id}" ${t.id === getnoteTopicId ? 'selected' : ''}>${t.name}</option>`).join('');
+            showToast("已加载 " + topics.length + " 个知识库");
+        }).catch(err => showToast("加载失败：" + err.message));
     };
     document.getElementById('wr-getnote-tags').onchange = (e) => {
         getnoteTags = e.target.value;
